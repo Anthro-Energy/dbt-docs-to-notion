@@ -304,95 +304,150 @@ def main(argv=None):
             }
           )
   
+        # Split raw code into chunks
+        raw_code = data['raw_code'] if 'raw_code' in data else data['raw_sql']
+        raw_code_chunks = split_text_into_chunks(raw_code)
+        raw_code_blocks = []
+
+        for i, chunk in enumerate(raw_code_chunks):
+            # First chunk or single chunk
+            if i == 0:
+                raw_code_blocks.append({
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": { "content": "Raw Code" }
+                            }
+                        ]
+                    }
+                })
+            # Additional chunks get a continuation header
+            elif i > 0:
+                raw_code_blocks.append({
+                    "object": "block",
+                    "type": "heading_3",
+                    "heading_3": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": { "content": f"(continued {i+1}/{len(raw_code_chunks)})" }
+                            }
+                        ]
+                    }
+                })
+            
+            # Add the code block for this chunk
+            raw_code_blocks.append({
+                "object": "block",
+                "type": "code",
+                "code": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": chunk
+                            }
+                        }
+                    ],
+                    "language": "sql"
+                }
+            })
+
+        # Split compiled code into chunks
+        compiled_code = data['compiled_code'] if 'compiled_code' in data else data['compiled_sql']
+        compiled_code_chunks = split_text_into_chunks(compiled_code)
+        compiled_code_blocks = []
+
+        for i, chunk in enumerate(compiled_code_chunks):
+            # First chunk or single chunk
+            if i == 0:
+                compiled_code_blocks.append({
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": { "content": "Compiled Code" }
+                            }
+                        ]
+                    }
+                })
+            # Additional chunks get a continuation header
+            elif i > 0:
+                compiled_code_blocks.append({
+                    "object": "block",
+                    "type": "heading_3",
+                    "heading_3": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": { "content": f"(continued {i+1}/{len(compiled_code_chunks)})" }
+                            }
+                        ]
+                    }
+                })
+            
+            # Add the code block for this chunk
+            compiled_code_blocks.append({
+                "object": "block",
+                "type": "code",
+                "code": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": chunk
+                            }
+                        }
+                    ],
+                    "language": "sql"
+                }
+            })
+
+        # Update record_children_obj to use the chunked code blocks
         record_children_obj = [
-          # Table of contents
-          {
-            "object": "block",
-            "type": "table_of_contents",
-            "table_of_contents": {
-              "color": "default"
-            }
-          },
-          # Columns
-          {
-            "object": "block",
-            "type": "heading_1",
-            "heading_1": {
-              "rich_text": [
-                {
-                  "type": "text",
-                  "text": { "content": "Columns" }
+            # Table of contents
+            {
+                "object": "block",
+                "type": "table_of_contents",
+                "table_of_contents": {
+                    "color": "default"
                 }
-              ]
-            }
-          },
-          {
-            "object": "block",
-            "type": "table",
-            "table": {
-              "table_width": 3,
-              "has_column_header": True,
-              "has_row_header": False,
-              "children": columns_table_children_obj
-            }
-          },
-          # Raw Code
-          {
-            "object": "block",
-            "type": "heading_1",
-            "heading_1": {
-              "rich_text": [
-                {
-                  "type": "text",
-                  "text": { "content": "Raw Code" }
+            },
+            # Columns
+            {
+                "object": "block",
+                "type": "heading_1",
+                "heading_1": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": { "content": "Columns" }
+                        }
+                    ]
                 }
-              ]
-            }
-          },
-          {
-            "object": "block",
-            "type": "code",
-            "code": {
-              "rich_text": [
-                {
-                  "type": "text",
-                  "text": {
-                    "content": data['raw_code'][:2000] if 'raw_code' in data else data['raw_sql'][:2000]
-                  }
+            },
+            {
+                "object": "block",
+                "type": "table",
+                "table": {
+                    "table_width": 3,
+                    "has_column_header": True,
+                    "has_row_header": False,
+                    "children": columns_table_children_obj
                 }
-              ],
-              "language": "sql"
             }
-          },
-          # Compiled Code
-          {
-            "object": "block",
-            "type": "heading_1",
-            "heading_1": {
-              "rich_text": [
-                {
-                  "type": "text",
-                  "text": { "content": "Compiled Code" }
-                }
-              ]
-            }
-          },
-          {
-            "object": "block",
-            "type": "code",
-            "code": {
-              "rich_text": [
-                {
-                  "type": "text",
-                  "text": {
-                    "content": data['compiled_code'][:2000] if 'compiled_code' in data else data['compiled_sql'][:2000]
-                  }
-                }
-              ],
-              "language": "sql"
-            }
-          }
         ]
+
+        # Add all raw code blocks
+        record_children_obj.extend(raw_code_blocks)
+
+        # Add all compiled code blocks
+        record_children_obj.extend(compiled_code_blocks)
   
         # Split description into chunks
         description_chunks = split_text_into_chunks(data['description'])
@@ -508,10 +563,12 @@ def main(argv=None):
           # Handle batching for tables with many columns
           if len(columns_table_children_obj) >= 100:
             batch_size = 98
+            # First, create all column tables
             for i in range(0, len(columns_table_children_obj), batch_size):
               batched_array = columns_table_children_obj[i:i + batch_size]
+              
               if i == 0:
-                # First batch includes all the other content
+                # First batch includes table of contents and column heading
                 record_children_obj = [
                   # Table of contents
                   {
@@ -543,95 +600,11 @@ def main(argv=None):
                       "has_row_header": False,
                       "children": batched_array
                     }
-                  },
-                  # Raw Code
-                  {
-                    "object": "block",
-                    "type": "heading_1",
-                    "heading_1": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": { "content": "Raw Code" }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "object": "block",
-                    "type": "code",
-                    "code": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": {
-                            "content": data['raw_code'][:2000] if 'raw_code' in data else data['raw_sql'][:2000]
-                          }
-                        }
-                      ],
-                      "language": "sql"
-                    }
-                  },
-                  # Compiled Code
-                  {
-                    "object": "block",
-                    "type": "heading_1",
-                    "heading_1": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": { "content": "Compiled Code" }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "object": "block",
-                    "type": "code",
-                    "code": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": {
-                            "content": data['compiled_code'][:2000] if 'compiled_code' in data else data['compiled_sql'][:2000]
-                          }
-                        }
-                      ],
-                      "language": "sql"
-                    }
                   }
                 ]
-                
-                _record_children_replacement_resp = make_request(
-                  endpoint='blocks/',
-                  querystring=f'{record_id}/children',
-                  method='PATCH',
-                  json={"children": record_children_obj}
-                )
               else:
-                # Subsequent batches only include additional column tables
+                # Subsequent batches only include additional column tables without headers
                 record_children_obj = [
-                  # Table of contents
-                  {
-                    "object": "block",
-                    "type": "table_of_contents",
-                    "table_of_contents": {
-                      "color": "default"
-                    }
-                  },
-                  # Columns
-                  {
-                    "object": "block",
-                    "type": "heading_1",
-                    "heading_1": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": { "content": "Columns" }
-                        }
-                      ]
-                    }
-                  },
                   {
                     "object": "block",
                     "type": "table",
@@ -643,13 +616,21 @@ def main(argv=None):
                     }
                   }
                 ]
-                
-                _record_children_replacement_resp = make_request(
-                  endpoint='blocks/',
-                  querystring=f'{record_id}/children',
-                  method='PATCH',
-                  json={"children": record_children_obj}
-                )
+              
+              _record_children_replacement_resp = make_request(
+                endpoint='blocks/',
+                querystring=f'{record_id}/children',
+                method='PATCH',
+                json={"children": record_children_obj}
+              )
+            
+            # After all column tables are created, add the code blocks
+            _record_children_replacement_resp = make_request(
+              endpoint='blocks/',
+              querystring=f'{record_id}/children',
+              method='PATCH',
+              json={"children": raw_code_blocks + compiled_code_blocks}
+            )
           else:
             # For tables with fewer columns, use the original approach
             _record_children_replacement_resp = make_request(
@@ -665,11 +646,12 @@ def main(argv=None):
           # Handle batching for tables with many columns
           if len(columns_table_children_obj) >= 100:
             batch_size = 98
+            # First, create all column tables
             for i in range(0, len(columns_table_children_obj), batch_size):
               batched_array = columns_table_children_obj[i:i + batch_size]
               
               if i == 0:
-                # First batch includes all the other content
+                # First batch includes table of contents and column heading
                 record_children_obj = [
                   # Table of contents
                   {
@@ -701,106 +683,11 @@ def main(argv=None):
                       "has_row_header": False,
                       "children": batched_array
                     }
-                  },
-                  # Raw Code
-                  {
-                    "object": "block",
-                    "type": "heading_1",
-                    "heading_1": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": { "content": "Raw Code" }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "object": "block",
-                    "type": "code",
-                    "code": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": {
-                            "content": data['raw_code'][:2000] if 'raw_code' in data else data['raw_sql'][:2000]
-                          }
-                        }
-                      ],
-                      "language": "sql"
-                    }
-                  },
-                  # Compiled Code
-                  {
-                    "object": "block",
-                    "type": "heading_1",
-                    "heading_1": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": { "content": "Compiled Code" }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "object": "block",
-                    "type": "code",
-                    "code": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": {
-                            "content": data['compiled_code'][:2000] if 'compiled_code' in data else data['compiled_sql'][:2000]
-                          }
-                        }
-                      ],
-                      "language": "sql"
-                    }
                   }
                 ]
-                
-                # Create the initial record
-                record_obj['children'] = record_children_obj
-                _record_creation_resp = make_request(
-                  endpoint='pages/',
-                  querystring='',
-                  method='POST',
-                  json=record_obj
-                )
-                
-                # Get the record ID for subsequent updates
-                record_query_resp = make_request(
-                  endpoint='databases/',
-                  querystring=f'{database_id}/query',
-                  method='POST',
-                  json=query_obj
-                )
-                record_id = record_query_resp['results'][0]['id']
               else:
-                # Subsequent batches only include additional column tables
+                # Subsequent batches only include additional column tables without headers
                 record_children_obj = [
-                  # Table of contents
-                  {
-                    "object": "block",
-                    "type": "table_of_contents",
-                    "table_of_contents": {
-                      "color": "default"
-                    }
-                  },
-                  # Columns
-                  {
-                    "object": "block",
-                    "type": "heading_1",
-                    "heading_1": {
-                      "rich_text": [
-                        {
-                          "type": "text",
-                          "text": { "content": "Columns" }
-                        }
-                      ]
-                    }
-                  },
                   {
                     "object": "block",
                     "type": "table",
@@ -812,13 +699,13 @@ def main(argv=None):
                     }
                   }
                 ]
-                
-                _record_children_replacement_resp = make_request(
-                  endpoint='blocks/',
-                  querystring=f'{record_id}/children',
-                  method='PATCH',
-                  json={"children": record_children_obj}
-                )
+              
+              _record_children_replacement_resp = make_request(
+                endpoint='blocks/',
+                querystring=f'{record_id}/children',
+                method='PATCH',
+                json={"children": record_children_obj}
+              )
           else:
             # For tables with fewer columns, use the original approach
             record_obj['children'] = record_children_obj

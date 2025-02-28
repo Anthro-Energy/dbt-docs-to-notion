@@ -60,7 +60,7 @@ def get_owner(data, catalog_nodes, model_name):
 
 def split_text_into_chunks(text, chunk_size=2000):
     """
-    Split text into chunks of specified size.
+    Split text into chunks of specified size, preserving line breaks.
     
     Parameters
     ----------
@@ -74,7 +74,37 @@ def split_text_into_chunks(text, chunk_size=2000):
     list
         List of text chunks
     """
-    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+    if not text:
+        return [""]
+    
+    lines = text.splitlines(True)  # Keep the newline characters
+    chunks = []
+    current_chunk = ""
+    
+    for line in lines:
+        # If adding this line would exceed the chunk size and we already have content,
+        # start a new chunk
+        if len(current_chunk) + len(line) > chunk_size and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = line
+        else:
+            current_chunk += line
+    
+    # Add the last chunk if it has content
+    if current_chunk:
+        chunks.append(current_chunk)
+    
+    # Handle the case where a single line is longer than chunk_size
+    final_chunks = []
+    for chunk in chunks:
+        if len(chunk) <= chunk_size:
+            final_chunks.append(chunk)
+        else:
+            # Split by character if a single line is too long
+            for i in range(0, len(chunk), chunk_size):
+                final_chunks.append(chunk[i:i + chunk_size])
+    
+    return final_chunks
 
 
 def main(argv=None):
@@ -307,39 +337,24 @@ def main(argv=None):
         # Split raw code into chunks
         raw_code = data['raw_code'] if 'raw_code' in data else data['raw_sql']
         raw_code_chunks = split_text_into_chunks(raw_code)
-        raw_code_blocks = []
+        raw_code_blocks = [
+            # Add the heading only once
+            {
+                "object": "block",
+                "type": "heading_1",
+                "heading_1": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": { "content": "Raw Code" }
+                        }
+                    ]
+                }
+            }
+        ]
 
-        for i, chunk in enumerate(raw_code_chunks):
-            # First chunk or single chunk
-            if i == 0:
-                raw_code_blocks.append({
-                    "object": "block",
-                    "type": "heading_1",
-                    "heading_1": {
-                        "rich_text": [
-                            {
-                                "type": "text",
-                                "text": { "content": "Raw Code" }
-                            }
-                        ]
-                    }
-                })
-            # Additional chunks get a continuation header
-            elif i > 0:
-                raw_code_blocks.append({
-                    "object": "block",
-                    "type": "heading_3",
-                    "heading_3": {
-                        "rich_text": [
-                            {
-                                "type": "text",
-                                "text": { "content": f"(continued {i+1}/{len(raw_code_chunks)})" }
-                            }
-                        ]
-                    }
-                })
-            
-            # Add the code block for this chunk
+        # Add each chunk as a separate code block without continuation headers
+        for chunk in raw_code_chunks:
             raw_code_blocks.append({
                 "object": "block",
                 "type": "code",
@@ -359,39 +374,24 @@ def main(argv=None):
         # Split compiled code into chunks
         compiled_code = data['compiled_code'] if 'compiled_code' in data else data['compiled_sql']
         compiled_code_chunks = split_text_into_chunks(compiled_code)
-        compiled_code_blocks = []
+        compiled_code_blocks = [
+            # Add the heading only once
+            {
+                "object": "block",
+                "type": "heading_1",
+                "heading_1": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": { "content": "Compiled Code" }
+                        }
+                    ]
+                }
+            }
+        ]
 
-        for i, chunk in enumerate(compiled_code_chunks):
-            # First chunk or single chunk
-            if i == 0:
-                compiled_code_blocks.append({
-                    "object": "block",
-                    "type": "heading_1",
-                    "heading_1": {
-                        "rich_text": [
-                            {
-                                "type": "text",
-                                "text": { "content": "Compiled Code" }
-                            }
-                        ]
-                    }
-                })
-            # Additional chunks get a continuation header
-            elif i > 0:
-                compiled_code_blocks.append({
-                    "object": "block",
-                    "type": "heading_3",
-                    "heading_3": {
-                        "rich_text": [
-                            {
-                                "type": "text",
-                                "text": { "content": f"(continued {i+1}/{len(compiled_code_chunks)})" }
-                            }
-                        ]
-                    }
-                })
-            
-            # Add the code block for this chunk
+        # Add each chunk as a separate code block without continuation headers
+        for chunk in compiled_code_chunks:
             compiled_code_blocks.append({
                 "object": "block",
                 "type": "code",

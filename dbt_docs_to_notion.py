@@ -58,6 +58,25 @@ def get_owner(data, catalog_nodes, model_name):
   return get_paths_or_empty(catalog_nodes, [[model_name, 'metadata', 'owner']], '')
 
 
+def split_text_into_chunks(text, chunk_size=2000):
+    """
+    Split text into chunks of specified size.
+    
+    Parameters
+    ----------
+    text : str
+        The text to split into chunks
+    chunk_size : int, default=2000
+        Maximum size of each chunk
+        
+    Returns
+    -------
+    list
+        List of text chunks
+    """
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+
 def main(argv=None):
   if argv is None:
     argv = sys.argv
@@ -201,7 +220,7 @@ def main(argv=None):
           [[model_name, 'columns']],
           {}
         ).items())
-        for (col_name, col_data) in col_names_and_data[:98]: # notion api limit is 100 table rows
+        for (col_name, col_data) in col_names_and_data: # notion api limit is 100 table rows
           columns_table_children_obj.append(
             {
               "type": "table_row",
@@ -375,6 +394,29 @@ def main(argv=None):
           }
         ]
   
+        # Split description into chunks
+        description_chunks = split_text_into_chunks(data['description'])
+        description_rich_text = [{"text": {"content": chunk}} for chunk in description_chunks]
+        
+        # Split owner into chunks
+        owner_text = str(get_owner(data, catalog_nodes, model_name))
+        owner_chunks = split_text_into_chunks(owner_text)
+        owner_rich_text = [{"text": {"content": chunk}} for chunk in owner_chunks]
+        
+        # Split relation_name into chunks
+        relation_chunks = split_text_into_chunks(data['relation_name'])
+        relation_rich_text = [{"text": {"content": chunk}} for chunk in relation_chunks]
+        
+        # Split depends_on into chunks
+        depends_on_text = json.dumps(data['depends_on'])
+        depends_on_chunks = split_text_into_chunks(depends_on_text)
+        depends_on_rich_text = [{"text": {"content": chunk}} for chunk in depends_on_chunks]
+        
+        # Split tags into chunks
+        tags_text = json.dumps(data['tags'])
+        tags_chunks = split_text_into_chunks(tags_text)
+        tags_rich_text = [{"text": {"content": chunk}} for chunk in tags_chunks]
+        
         record_obj = {
           "parent": {
             "database_id": database_id
@@ -390,34 +432,13 @@ def main(argv=None):
               ]
             },
             "Description": {
-              "rich_text": [
-                {
-                  "text": {
-                    "content": data['description'][:2000]
-                    # notion api limit is 2k characters per rich text block
-                  }
-                }
-              ]
+              "rich_text": description_rich_text
             },
             "Owner": {
-              "rich_text": [
-                {
-                  "text": {
-                    "content": str(
-                      get_owner(data, catalog_nodes, model_name)
-                    )[:2000]
-                  }
-                }
-              ]
+              "rich_text": owner_rich_text
             },
             "Relation": {
-              "rich_text": [
-                {
-                  "text": {
-                    "content": data['relation_name'][:2000]
-                  }
-                }
-              ]
+              "rich_text": relation_rich_text
             },
             "Approx Rows": {
               "number": get_paths_or_empty(
@@ -436,22 +457,10 @@ def main(argv=None):
               ) / 1e9
             },
             "Depends On": {
-              "rich_text": [
-                {
-                  "text": {
-                    "content": json.dumps(data['depends_on'])[:2000]
-                  }
-                }
-              ]
+              "rich_text": depends_on_rich_text
             },
             "Tags": {
-              "rich_text": [
-                {
-                  "text": {
-                    "content": json.dumps(data['tags'])[:2000]
-                  }
-                }
-              ]
+              "rich_text": tags_rich_text
             }
           }
         }
@@ -496,22 +505,329 @@ def main(argv=None):
               method='DELETE'
             )
   
-          _record_children_replacement_resp = make_request(
-            endpoint='blocks/',
-            querystring=f'{record_id}/children',
-            method='PATCH',
-            json={"children": record_children_obj}
-          )
+          # Handle batching for tables with many columns
+          if len(columns_table_children_obj) >= 100:
+            batch_size = 98
+            for i in range(0, len(columns_table_children_obj), batch_size):
+              batched_array = columns_table_children_obj[i:i + batch_size]
+              if i == 0:
+                # First batch includes all the other content
+                record_children_obj = [
+                  # Table of contents
+                  {
+                    "object": "block",
+                    "type": "table_of_contents",
+                    "table_of_contents": {
+                      "color": "default"
+                    }
+                  },
+                  # Columns
+                  {
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": { "content": "Columns" }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "object": "block",
+                    "type": "table",
+                    "table": {
+                      "table_width": 3,
+                      "has_column_header": True,
+                      "has_row_header": False,
+                      "children": batched_array
+                    }
+                  },
+                  # Raw Code
+                  {
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": { "content": "Raw Code" }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "object": "block",
+                    "type": "code",
+                    "code": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": {
+                            "content": data['raw_code'][:2000] if 'raw_code' in data else data['raw_sql'][:2000]
+                          }
+                        }
+                      ],
+                      "language": "sql"
+                    }
+                  },
+                  # Compiled Code
+                  {
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": { "content": "Compiled Code" }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "object": "block",
+                    "type": "code",
+                    "code": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": {
+                            "content": data['compiled_code'][:2000] if 'compiled_code' in data else data['compiled_sql'][:2000]
+                          }
+                        }
+                      ],
+                      "language": "sql"
+                    }
+                  }
+                ]
+                
+                _record_children_replacement_resp = make_request(
+                  endpoint='blocks/',
+                  querystring=f'{record_id}/children',
+                  method='PATCH',
+                  json={"children": record_children_obj}
+                )
+              else:
+                # Subsequent batches only include additional column tables
+                record_children_obj = [
+                  # Table of contents
+                  {
+                    "object": "block",
+                    "type": "table_of_contents",
+                    "table_of_contents": {
+                      "color": "default"
+                    }
+                  },
+                  # Columns
+                  {
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": { "content": "Columns" }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "object": "block",
+                    "type": "table",
+                    "table": {
+                      "table_width": 3,
+                      "has_column_header": True,
+                      "has_row_header": False,
+                      "children": batched_array
+                    }
+                  }
+                ]
+                
+                _record_children_replacement_resp = make_request(
+                  endpoint='blocks/',
+                  querystring=f'{record_id}/children',
+                  method='PATCH',
+                  json={"children": record_children_obj}
+                )
+          else:
+            # For tables with fewer columns, use the original approach
+            _record_children_replacement_resp = make_request(
+              endpoint='blocks/',
+              querystring=f'{record_id}/children',
+              method='PATCH',
+              json={"children": record_children_obj}
+            )
   
         else:
           print(f'\ncreating {model_name} record')
-          record_obj['children'] = record_children_obj
-          _record_creation_resp = make_request(
-            endpoint='pages/',
-            querystring='',
-            method='POST',
-            json=record_obj
-          )
+          
+          # Handle batching for tables with many columns
+          if len(columns_table_children_obj) >= 100:
+            batch_size = 98
+            for i in range(0, len(columns_table_children_obj), batch_size):
+              batched_array = columns_table_children_obj[i:i + batch_size]
+              
+              if i == 0:
+                # First batch includes all the other content
+                record_children_obj = [
+                  # Table of contents
+                  {
+                    "object": "block",
+                    "type": "table_of_contents",
+                    "table_of_contents": {
+                      "color": "default"
+                    }
+                  },
+                  # Columns
+                  {
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": { "content": "Columns" }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "object": "block",
+                    "type": "table",
+                    "table": {
+                      "table_width": 3,
+                      "has_column_header": True,
+                      "has_row_header": False,
+                      "children": batched_array
+                    }
+                  },
+                  # Raw Code
+                  {
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": { "content": "Raw Code" }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "object": "block",
+                    "type": "code",
+                    "code": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": {
+                            "content": data['raw_code'][:2000] if 'raw_code' in data else data['raw_sql'][:2000]
+                          }
+                        }
+                      ],
+                      "language": "sql"
+                    }
+                  },
+                  # Compiled Code
+                  {
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": { "content": "Compiled Code" }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "object": "block",
+                    "type": "code",
+                    "code": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": {
+                            "content": data['compiled_code'][:2000] if 'compiled_code' in data else data['compiled_sql'][:2000]
+                          }
+                        }
+                      ],
+                      "language": "sql"
+                    }
+                  }
+                ]
+                
+                # Create the initial record
+                record_obj['children'] = record_children_obj
+                _record_creation_resp = make_request(
+                  endpoint='pages/',
+                  querystring='',
+                  method='POST',
+                  json=record_obj
+                )
+                
+                # Get the record ID for subsequent updates
+                record_query_resp = make_request(
+                  endpoint='databases/',
+                  querystring=f'{database_id}/query',
+                  method='POST',
+                  json=query_obj
+                )
+                record_id = record_query_resp['results'][0]['id']
+              else:
+                # Subsequent batches only include additional column tables
+                record_children_obj = [
+                  # Table of contents
+                  {
+                    "object": "block",
+                    "type": "table_of_contents",
+                    "table_of_contents": {
+                      "color": "default"
+                    }
+                  },
+                  # Columns
+                  {
+                    "object": "block",
+                    "type": "heading_1",
+                    "heading_1": {
+                      "rich_text": [
+                        {
+                          "type": "text",
+                          "text": { "content": "Columns" }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "object": "block",
+                    "type": "table",
+                    "table": {
+                      "table_width": 3,
+                      "has_column_header": True,
+                      "has_row_header": False,
+                      "children": batched_array
+                    }
+                  }
+                ]
+                
+                _record_children_replacement_resp = make_request(
+                  endpoint='blocks/',
+                  querystring=f'{record_id}/children',
+                  method='PATCH',
+                  json={"children": record_children_obj}
+                )
+          else:
+            # For tables with fewer columns, use the original approach
+            record_obj['children'] = record_children_obj
+            _record_creation_resp = make_request(
+              endpoint='pages/',
+              querystring='',
+              method='POST',
+              json=record_obj
+            )
     except Exception as e:
       print(e)
       continue

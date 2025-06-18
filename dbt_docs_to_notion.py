@@ -205,7 +205,7 @@ def main(argv=None):
     try:
       if model_records_to_write == ['all'] or model_name in model_records_to_write:
         # form record object
-        column_descriptions = {name: metadata['description']
+        column_descriptions = {name.lower(): metadata['description']
                               for name, metadata
                               in data['columns'].items()}
   

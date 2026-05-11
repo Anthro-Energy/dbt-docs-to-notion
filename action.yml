@@ -41,6 +41,9 @@ runs:
     - name: Install dbt
       run: "pip3 install ${{ inputs.dbt-package }}"
       shell: bash
+    - name: Clean project
+      run: "dbt clean --project-dir ${{ inputs.dbt-project-path }} --profiles-dir ${{ inputs.dbt-profile-path }} --target=${{ inputs.dbt-target }} --no-clean-project-files-only"
+      shell: bash
     - name: Load dbt deps
       run: "dbt deps --project-dir ${{ inputs.dbt-project-path }} --profiles-dir ${{ inputs.dbt-profile-path }} --target=${{ inputs.dbt-target }}"
       shell: bash

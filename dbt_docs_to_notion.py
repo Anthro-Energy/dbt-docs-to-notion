@@ -257,6 +257,21 @@ def batch_children(children):
   return batches
 
 
+def stable_json(value):
+  """dbt list fields like depends_on.nodes come back in a different order on
+  every full parse; sort them so the rendered text and sync hash are
+  parse-order independent."""
+  if isinstance(value, dict):
+    return {key: stable_json(val) for key, val in sorted(value.items())}
+  if isinstance(value, list):
+    canonical = [stable_json(val) for val in value]
+    try:
+      return sorted(canonical)
+    except TypeError:
+      return canonical
+  return value
+
+
 def compute_sync_hash(properties, children):
   payload = json.dumps(
     {'properties': properties, 'children': children}, sort_keys=True
@@ -358,8 +373,10 @@ def build_record(model_name, data, catalog_nodes, database_id):
       "rich_text": rich_text_chunks(str(get_owner(data, catalog_nodes, model_name)))
     },
     "Relation": {"rich_text": rich_text_chunks(data['relation_name'])},
-    "Depends On": {"rich_text": rich_text_chunks(json.dumps(data['depends_on']))},
-    "Tags": {"rich_text": rich_text_chunks(json.dumps(data['tags']))},
+    "Depends On": {
+      "rich_text": rich_text_chunks(json.dumps(stable_json(data['depends_on'])))
+    },
+    "Tags": {"rich_text": rich_text_chunks(json.dumps(stable_json(data['tags'])))},
   }
   sync_hash = compute_sync_hash(properties, children)
 

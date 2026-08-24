@@ -9,6 +9,8 @@ from dbt_docs_to_notion import (
   get_owner,
   batch_children,
   build_column_tables,
+  build_record,
+  stable_json,
   MAX_ATTEMPTS,
 )
 from tests.mock_data import DBT_MOCK_MANIFEST, DBT_MOCK_CATALOG, NOTION_MOCK_DATABASE_CREATE
@@ -119,6 +121,24 @@ class TestBatching(unittest.TestCase):
         tables = build_column_tables([], {})
         self.assertEqual(len(tables), 1)
         self.assertEqual(len(tables[0]['table']['children']), 1)
+
+
+class TestStableHash(unittest.TestCase):
+    def test_stable_json_sorts_nested_lists(self):
+        self.assertEqual(
+          stable_json({'nodes': ['b', 'a'], 'macros': []}),
+          {'macros': [], 'nodes': ['a', 'b']}
+        )
+
+    def test_sync_hash_invariant_under_parse_order(self):
+        """dbt's depends_on list order varies between full parses; the sync
+        hash must not."""
+        base = DBT_MOCK_MANIFEST['nodes']['model.test.model_1']
+        variant_a = {**base, 'depends_on': {'macros': [], 'nodes': ['s.x', 's.y']}}
+        variant_b = {**base, 'depends_on': {'nodes': ['s.y', 's.x'], 'macros': []}}
+        _, _, hash_a = build_record('model.test.model_1', variant_a, DBT_MOCK_CATALOG['nodes'], 'db')
+        _, _, hash_b = build_record('model.test.model_1', variant_b, DBT_MOCK_CATALOG['nodes'], 'db')
+        self.assertEqual(hash_a, hash_b)
 
 
 class TestGetPathsOrEmpty(unittest.TestCase):

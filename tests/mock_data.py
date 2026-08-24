@@ -82,3 +82,40 @@ NOTION_MOCK_DATABASE_CREATE = {
 NOTION_MOCK_RECORD_CREATE = {
   "id": "mock_record_id",
 }
+
+NOTION_MOCK_RECORD_CHILDREN = {
+  "results": [
+    {
+      "id": "mock_block_id",
+    },
+  ],
+}
+
+# Database schema as this version of the exporter creates it
+NOTION_MOCK_DATABASE_RETRIEVE_CURRENT = {
+  "id": "mock_child_id",
+  "properties": {
+    "Name": {"title": {}},
+    "Description": {"rich_text": {}},
+    "Owner": {"rich_text": {}},
+    "Relation": {"rich_text": {}},
+    "Depends On": {"rich_text": {}},
+    "Tags": {"rich_text": {}},
+    "Sync Hash": {"rich_text": {}},
+  },
+}
+
+# Database schema from before Sync Hash existed and Approx Rows/GB were retired
+NOTION_MOCK_DATABASE_RETRIEVE_LEGACY = {
+  "id": "mock_child_id",
+  "properties": {
+    "Name": {"title": {}},
+    "Description": {"rich_text": {}},
+    "Owner": {"rich_text": {}},
+    "Relation": {"rich_text": {}},
+    "Approx Rows": {"number": {"format": "number_with_commas"}},
+    "Approx GB": {"number": {"format": "number_with_commas"}},
+    "Depends On": {"rich_text": {}},
+    "Tags": {"rich_text": {}},
+  },
+}
